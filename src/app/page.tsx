@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import type React from "react"
 import { supabase } from "../../lib/supabaseClient"
-import { Plus, X, Upload } from "lucide-react"
+import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
