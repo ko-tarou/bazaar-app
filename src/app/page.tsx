@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import type React from "react"
 import { supabase } from "../../lib/supabaseClient"
-import { Plus } from "lucide-react"
+import { Plus, X, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -33,7 +33,6 @@ export default function Home() {
   })
 
   useEffect(() => {
-    // 初回データ取得
     const fetchProducts = async () => {
       const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
       if (error) console.error("Error fetching products:", error)
@@ -42,11 +41,10 @@ export default function Home() {
 
     fetchProducts()
 
-    // リアルタイム更新を購読
     const subscription = supabase
       .channel("products")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
-        fetchProducts() // データを再取得して更新
+        fetchProducts()
       })
       .subscribe()
 
@@ -71,6 +69,10 @@ export default function Home() {
     }
   }
 
+  const handleImageRemove = () => {
+    setFormData({ ...formData, image: null, imagePreview: "" })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -78,7 +80,6 @@ export default function Home() {
     try {
       let imageUrl = ""
 
-      // 画像がある場合はアップロード
       if (formData.image) {
         const fileExt = formData.image.name.split(".").pop()
         const fileName = `${uuidv4()}.${fileExt}`
@@ -88,26 +89,23 @@ export default function Home() {
 
         if (uploadError) throw uploadError
 
-        // 画像のURLを取得
         const { data } = supabase.storage.from("product-images").getPublicUrl(filePath)
         if (data) {
           imageUrl = data.publicUrl
         }
       }
 
-      // 商品データを保存
       const { error } = await supabase.from("products").insert([
         {
           name: formData.name,
           description: formData.description,
           image_url: imageUrl,
-          price: null, // 価格は運営が設定するためnull
+          price: null,
         },
       ])
 
       if (error) throw error
 
-      // フォームをリセット
       setFormData({
         name: "",
         description: "",
@@ -151,7 +149,24 @@ export default function Home() {
 
               <div className="space-y-2">
                 <Label htmlFor="image">商品画像</Label>
-                <Input id="image" type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                <div className="flex flex-col items-center gap-4">
+                  {formData.imagePreview ? (
+                    <div className="relative w-full h-48 border border-gray-300 rounded-md">
+                      <Image src={formData.imagePreview} alt="プレビュー" fill className="object-cover rounded-md" />
+                      <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2" onClick={handleImageRemove}>
+                        <X size={16} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                        <p className="text-sm text-gray-500">クリックして画像をアップロード</p>
+                      </div>
+                      <Input id="image" type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                    </label>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
