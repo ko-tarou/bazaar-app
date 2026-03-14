@@ -4,6 +4,7 @@
 /node_modules
 front/node_modules
 front/.next/
+front/package-lock.json
 back/uploads/
 back/back
 /.pnp
