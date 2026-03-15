@@ -24,6 +24,7 @@ type Product struct {
 	Price       *int      `json:"price"`
 	Category    string    `json:"category"`
 	Stock       int       `json:"stock"`
+	Status      string    `json:"status"`
 	ImageURL    string    `json:"image_url"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -51,6 +52,7 @@ func main() {
 		api.GET("/products", getProducts)
 		api.POST("/products", createProduct)
 		api.PUT("/products/:id", updateProduct)
+		api.PATCH("/products/:id/status", patchProductStatus)
 		api.DELETE("/products/:id", deleteProduct)
 	}
 
@@ -62,7 +64,7 @@ func main() {
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "http://localhost:3000")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -77,7 +79,7 @@ func getProducts(c *gin.Context) {
 	search := c.Query("search")
 	sort := c.Query("sort") // "price_asc", "price_desc", "newest"
 
-	query := `SELECT id, name, description, price, category, stock, image_url, created_at
+	query := `SELECT id, name, description, price, category, stock, status, image_url, created_at
 	          FROM products WHERE 1=1`
 	args := []any{}
 	idx := 1
@@ -112,7 +114,7 @@ func getProducts(c *gin.Context) {
 	products := []Product{}
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Category, &p.Stock, &p.ImageURL, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Category, &p.Stock, &p.Status, &p.ImageURL, &p.CreatedAt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -180,9 +182,9 @@ func createProduct(c *gin.Context) {
 
 	var p Product
 	db.QueryRow(context.Background(),
-		`SELECT id, name, description, price, category, stock, image_url, created_at
+		`SELECT id, name, description, price, category, stock, status, image_url, created_at
 		 FROM products WHERE id=$1`, id,
-	).Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Category, &p.Stock, &p.ImageURL, &p.CreatedAt)
+	).Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Category, &p.Stock, &p.Status, &p.ImageURL, &p.CreatedAt)
 
 	c.JSON(http.StatusCreated, p)
 }
@@ -249,11 +251,37 @@ func updateProduct(c *gin.Context) {
 
 	var p Product
 	db.QueryRow(context.Background(),
-		`SELECT id, name, description, price, category, stock, image_url, created_at
+		`SELECT id, name, description, price, category, stock, status, image_url, created_at
 		 FROM products WHERE id=$1`, id,
-	).Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Category, &p.Stock, &p.ImageURL, &p.CreatedAt)
+	).Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.Category, &p.Stock, &p.Status, &p.ImageURL, &p.CreatedAt)
 
 	c.JSON(http.StatusOK, p)
+}
+
+func patchProductStatus(c *gin.Context) {
+	id := c.Param("id")
+	var body struct {
+		Status string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+	if body.Status != "available" && body.Status != "reserved" && body.Status != "sold" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status は available / reserved / sold のいずれかです"})
+		return
+	}
+	result, err := db.Exec(context.Background(),
+		`UPDATE products SET status=$1 WHERE id=$2`, body.Status, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if result.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "商品が見つかりません"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": body.Status})
 }
 
 func deleteProduct(c *gin.Context) {
